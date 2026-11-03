@@ -14,6 +14,23 @@ variable "github_repository" {
   }
 }
 
+variable "github_repository_owner_id" {
+  description = "Numeric ID of the repository owner. Set together with github_repository_id when the repository uses GitHub's immutable OIDC subject (repo:<owner>@<owner_id>/<repo>@<repo_id>:...)."
+  type        = number
+  default     = null
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the repository (see github_repository_owner_id)."
+  type        = number
+  default     = null
+
+  validation {
+    condition     = (var.github_repository_id == null) == (var.github_repository_owner_id == null)
+    error_message = "Set both github_repository_owner_id and github_repository_id, or neither."
+  }
+}
+
 variable "github_environments" {
   description = "GitHub environments (= deployment stages) whose jobs may assume the role."
   type        = list(string)

@@ -120,6 +120,32 @@ run "custom_environments" {
   }
 }
 
+run "immutable_subject_uses_numeric_ids" {
+  variables {
+    github_repository_owner_id = 111
+    github_repository_id       = 222
+  }
+
+  assert {
+    condition = output.allowed_subjects == [
+      "repo:acme@111/site@222:environment:development",
+      "repo:acme@111/site@222:environment:staging",
+      "repo:acme@111/site@222:environment:production",
+    ]
+    error_message = "Immutable subjects must include the owner and repository IDs."
+  }
+}
+
+run "rejects_only_one_repository_id" {
+  command = plan
+
+  variables {
+    github_repository_id = 222
+  }
+
+  expect_failures = [var.github_repository_id]
+}
+
 run "rejects_invalid_repository" {
   command = plan
 

@@ -31,6 +31,10 @@ on:
         description: Terraform state bucket (empty = <project_name>-tfstate-<account id>); created if missing
         type: string
         default: ""
+      immutable_subject:
+        description: The repository uses GitHub's immutable OIDC subject (owner@id/repo@id)
+        type: boolean
+        default: true
       create_oidc_provider:
         description: Create the GitHub OIDC provider (leave off if the account already has one)
         type: boolean
@@ -88,6 +92,28 @@ jobs:
           echo "TF_VAR_github_environments=$ENVIRONMENTS_JSON" >> "$GITHUB_ENV"
           echo "Repository:   $TF_VAR_github_repository"
           echo "Environments: $ENVIRONMENTS_JSON"
+
+      # Immutable subjects identify the repository by numeric IDs, read from GitHub at run time.
+      - name: Resolve repository IDs
+        if: inputs.immutable_subject
+        run: |
+          if [ "$TF_VAR_github_repository" = "$CURRENT_REPOSITORY" ]; then
+            OWNER_ID="$CURRENT_OWNER_ID"
+            REPO_ID="$CURRENT_REPO_ID"
+          elif ! read -r OWNER_ID REPO_ID < <(gh api "repos/$TF_VAR_github_repository" --jq '"\(.owner.id) \(.id)"'); then
+            echo "::error::Cannot read $TF_VAR_github_repository with this workflow's token. Run create_role.yml from that repository or make it readable."
+            exit 1
+          fi
+          {
+            echo "TF_VAR_github_repository_owner_id=$OWNER_ID"
+            echo "TF_VAR_github_repository_id=$REPO_ID"
+          } >> "$GITHUB_ENV"
+          echo "Subject: repo:${TF_VAR_github_repository%%/*}@$OWNER_ID/${TF_VAR_github_repository#*/}@$REPO_ID:environment:<name>"
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CURRENT_REPOSITORY: ${{ github.repository }}
+          CURRENT_OWNER_ID: ${{ github.repository_owner_id }}
+          CURRENT_REPO_ID: ${{ github.repository_id }}
 
       - name: Configure AWS credentials (OIDC, bootstrap role)
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0

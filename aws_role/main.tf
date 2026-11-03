@@ -6,9 +6,15 @@ locals {
 
   oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : data.aws_iam_openid_connect_provider.github[0].arn
 
-  # GitHub puts "repo:<owner>/<repo>:environment:<name>" in the token's sub claim for jobs
-  # that use `environment:`, so only those deploy jobs can assume the role.
-  allowed_subjects = [for env in var.github_environments : "repo:${var.github_repository}:environment:${env}"]
+  # GitHub puts "repo:<repository>:environment:<name>" in the token's sub claim for jobs that use
+  # `environment:`, so only those deploy jobs can assume the role. With GitHub's immutable subject
+  # the repository part also carries the numeric IDs: "<owner>@<owner_id>/<repo>@<repo_id>".
+  subject_repository = var.github_repository_id == null ? var.github_repository : format(
+    "%s@%d/%s@%d",
+    split("/", var.github_repository)[0], var.github_repository_owner_id,
+    split("/", var.github_repository)[1], var.github_repository_id,
+  )
+  allowed_subjects = [for env in var.github_environments : "repo:${local.subject_repository}:environment:${env}"]
 
   website_bucket_arns = [for env in var.github_environments : "arn:aws:s3:::${var.project_name}-${env}-${local.account_id}"]
   state_bucket_arns   = [for b in var.state_bucket_names : "arn:aws:s3:::${b}"]

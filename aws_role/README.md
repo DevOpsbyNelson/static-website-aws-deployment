@@ -34,6 +34,7 @@ Job summary: AWS_DEPLOY_ROLE_ARN + REMOTE_STATE_ENV values to paste into each en
 | `role_name` | `github-actions-static-website-deploy` | Name of the role |
 | `project_name` | `static-website` | Must match `infrastructure/`'s `project_name` |
 | `state_bucket` | `<project_name>-tfstate-<account id>` | Bucket for Terraform state, shared by this folder and `infrastructure/` |
+| `immutable_subject` | `true` | Use GitHub's immutable subject (`owner@id/repo@id`); the IDs are read from GitHub at run time |
 | `create_oidc_provider` | `false` | Create the GitHub OIDC provider (only if the account has none) |
 | `aws_region` | `us-east-1` | Region of the state bucket |
 
@@ -53,6 +54,7 @@ State keys inside the bucket:
    - Leave the branch empty.
    - Permissions: `IAMFullAccess` and `AmazonS3FullAccess`.
    - Then edit its trust policy so `token.actions.githubusercontent.com:sub` is `repo:<owner>/<repo>:environment:aws-bootstrap`.
+   - If the repository uses GitHub's **immutable subject**, the subject also contains the numeric IDs: `repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:aws-bootstrap`. Check with `gh api repos/<owner>/<repo>/actions/oidc/customization/sub`; its `sub_claim_prefix` is the exact `repo:...` part. `create_role.yml` handles this for the deploy role through its `immutable_subject` input, which is on by default.
 3. **GitHub:** create the environment **`aws-bootstrap`**:
    - Required reviewers.
    - Deployment branches: `main`.
