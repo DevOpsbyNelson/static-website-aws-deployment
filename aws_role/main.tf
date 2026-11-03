@@ -65,11 +65,16 @@ resource "aws_iam_role_policy" "deploy" {
         Resource = local.state_bucket_arns
       },
       {
-        # State files, workspace states under env:/ and the .tflock lock files.
-        Sid      = "TerraformStateObjects"
-        Effect   = "Allow"
-        Action   = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
-        Resource = [for arn in local.state_bucket_arns : "${arn}/*"]
+        # Workspace states (env:/<stage>/<key>), the default-workspace key and their .tflock lock files.
+        # Other keys in the bucket (e.g. this role's own state) stay out of reach.
+        Sid    = "TerraformStateObjects"
+        Effect = "Allow"
+        Action = ["s3:GetObject", "s3:PutObject", "s3:DeleteObject"]
+        Resource = flatten([for arn in local.state_bucket_arns : [
+          "${arn}/env:/*",
+          "${arn}/${var.deploy_state_key}",
+          "${arn}/${var.deploy_state_key}.tflock",
+        ]])
       },
       {
         # Only the per-stage website buckets (<project>-<stage>-<account>), never the state buckets.

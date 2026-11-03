@@ -47,6 +47,12 @@ variable "state_bucket_names" {
   }
 }
 
+variable "deploy_state_key" {
+  description = "State key used by infrastructure/ (REMOTE_STORAGE_AWS_S3_KEY). The role may only touch this key and the env:/ workspace states."
+  type        = string
+  default     = "static-website/terraform.tfstate"
+}
+
 variable "create_oidc_provider" {
   description = "Create the GitHub OIDC identity provider. Set to false when the AWS account already has one (only one is allowed per account)."
   type        = bool
