@@ -1,0 +1,11 @@
+# Copy to terraform.tfvars and adjust as needed. These values apply to every workspace;
+# per-stage differences go in the `stages` map (keyed by workspace name).
+aws_region   = "us-east-1"
+project_name = "static-website"
+site_dir     = "../website/dist"
+
+# stages = {
+#   development = { price_class = "PriceClass_100", force_destroy = true,  noncurrent_version_days = 7 }
+#   staging     = { price_class = "PriceClass_100", force_destroy = true,  noncurrent_version_days = 14 }
+#   production  = { price_class = "PriceClass_All", force_destroy = false, noncurrent_version_days = 90 }
+# }
