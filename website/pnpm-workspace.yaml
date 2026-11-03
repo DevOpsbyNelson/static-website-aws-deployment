@@ -1,0 +1,8 @@
+minimumReleaseAgeExclude:
+  - '@babel/core@8.1.0'
+  - '@babel/generator@8.1.0'
+  - '@babel/helpers@8.1.0'
+  - '@babel/parser@8.1.0'
+  - '@babel/traverse@8.1.0'
+  - '@babel/types@8.1.0'
+  - '@vitejs/plugin-react@6.2.1'
