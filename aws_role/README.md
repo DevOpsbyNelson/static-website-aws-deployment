@@ -25,20 +25,21 @@ aws-bootstrap environment (AWS_BOOTSTRAP_ROLE_ARN)
 create_role.yml ──▶ creates the state bucket if missing ──▶ terraform apply (this folder)
    │
    ▼
-Job summary: AWS_DEPLOY_ROLE_ARN + REMOTE_STATE_ENV values to paste into each environment
+Job summary: AWS_DEPLOY_ROLE_ARN + REMOTE_STORAGE_* secret values to paste into each environment
 ```
 
 | Input | Default | Meaning |
 |---|---|---|
 | `action` | `plan` | `plan`, `apply` or `destroy` |
 | `github_repository` | this repo | Repository allowed to deploy (`owner/repo`) |
-| `github_environments` | `development,staging,production` | Environments allowed to assume the role |
 | `role_name` | `github-actions-static-website-deploy` | Name of the role |
 | `project_name` | `static-website` | Must match `infrastructure/`'s `project_name` |
 | `state_bucket` | `<project_name>-tfstate-<account id>` | Bucket for Terraform state, shared by this folder and `infrastructure/` |
 | `immutable_subject` | `true` | Use GitHub's immutable subject (`owner@id/repo@id`); the IDs are read from GitHub at run time |
 | `create_oidc_provider` | `false` | Create the GitHub OIDC provider (only if the account has none) |
 | `aws_region` | `us-east-1` | Region of the state bucket |
+
+The workflow always creates **one role for all three stages**. Its trust policy accepts the `development`, `staging` and `production` environments, the stages that `deploy.yml` maps branches to. Use the same `AWS_DEPLOY_ROLE_ARN` in all three environments.
 
 State keys inside the bucket:
 - `aws-role/terraform.tfstate` for this folder.
@@ -122,7 +123,9 @@ Get the IDs with `gh api repos/<owner>/<repo> --jq '.owner.id, .id'`.
 4. **GitHub:** run **Create Deploy Role** with `action = plan`, check the plan, then run it again with `action = apply`.
 5. **GitHub:** copy the values from the job summary into each environment (`development`, `staging`, `production`):
    - `AWS_DEPLOY_ROLE_ARN`
-   - `REMOTE_STATE_ENV`
+   - `REMOTE_STORAGE_AWS_S3_BUCKET`
+   - `REMOTE_STORAGE_AWS_REGION`
+   - `REMOTE_STORAGE_AWS_S3_KEY`
 
 To move to another AWS account, repeat these steps there: only the secrets change, not the code.
 

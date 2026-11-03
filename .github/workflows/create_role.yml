@@ -15,10 +15,6 @@ on:
         description: Repository allowed to deploy, as owner/repo (empty = this repository)
         type: string
         default: ""
-      github_environments:
-        description: Comma-separated GitHub environments allowed to assume the role
-        type: string
-        default: development,staging,production
       role_name:
         description: Name of the deploy role to create
         type: string
@@ -74,7 +70,8 @@ jobs:
       TF_VAR_project_name: ${{ inputs.project_name }}
       TF_VAR_create_oidc_provider: ${{ inputs.create_oidc_provider }}
       TF_VAR_aws_region: ${{ inputs.aws_region }}
-      ENVIRONMENTS_INPUT: ${{ inputs.github_environments }}
+      # One role for every stage that deploy.yml maps a branch to (main/staging/dev).
+      TF_VAR_github_environments: '["development","staging","production"]'
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -84,14 +81,6 @@ jobs:
         with:
           terraform_version: "1.15.6"
           terraform_wrapper: false # outputs are read with `terraform output -raw`
-
-      - name: Parse inputs
-        run: |
-          # "development, staging" -> ["development","staging"]
-          ENVIRONMENTS_JSON="$(jq -cn --arg s "$ENVIRONMENTS_INPUT" '$s | split(",") | map(gsub("^\\s+|\\s+$"; "")) | map(select(length > 0))')"
-          echo "TF_VAR_github_environments=$ENVIRONMENTS_JSON" >> "$GITHUB_ENV"
-          echo "Repository:   $TF_VAR_github_repository"
-          echo "Environments: $ENVIRONMENTS_JSON"
 
       # Immutable subjects identify the repository by numeric IDs, read from GitHub at run time.
       - name: Resolve repository IDs
@@ -176,27 +165,14 @@ jobs:
           {
             echo "## Deploy role ready"
             echo
-            echo "Add these **secrets** to each GitHub environment ($ENVIRONMENTS_INPUT):"
+            echo "Add these **secrets** to each GitHub environment (\`development\`, \`staging\`, \`production\`); the values are the same in all of them:"
             echo
-            echo "**AWS_DEPLOY_ROLE_ARN**"
-            echo '```'
-            echo "$ROLE_ARN"
-            echo '```'
-            for ENV in $(echo "$TF_VAR_github_environments" | jq -r '.[]'); do
-              case "$ENV" in
-                production) PREFIX=PROD ;;
-                staging) PREFIX=STAGING ;;
-                development) PREFIX=DEV ;;
-                *) PREFIX="$(echo "$ENV" | tr '[:lower:]-' '[:upper:]_')" ;;
-              esac
-              echo
-              echo "**REMOTE_STATE_ENV** for \`$ENV\`"
-              echo '```'
-              echo "${PREFIX}_REMOTE_STORAGE_AWS_S3_BUCKET=$STATE_BUCKET"
-              echo "${PREFIX}_REMOTE_STORAGE_AWS_REGION=$AWS_REGION"
-              echo "${PREFIX}_REMOTE_STORAGE_AWS_S3_KEY=$DEPLOY_STATE_KEY"
-              echo '```'
-            done
+            echo "| Secret | Value |"
+            echo "|---|---|"
+            echo "| \`AWS_DEPLOY_ROLE_ARN\` | \`$ROLE_ARN\` |"
+            echo "| \`REMOTE_STORAGE_AWS_S3_BUCKET\` | \`$STATE_BUCKET\` |"
+            echo "| \`REMOTE_STORAGE_AWS_REGION\` | \`$AWS_REGION\` |"
+            echo "| \`REMOTE_STORAGE_AWS_S3_KEY\` | \`$DEPLOY_STATE_KEY\` |"
           } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Clean up

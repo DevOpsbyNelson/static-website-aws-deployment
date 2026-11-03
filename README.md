@@ -101,17 +101,14 @@ Nothing in the code is tied to a specific AWS account. The account comes from th
    - Leave `create_oidc_provider` off if step 1 was already done, and leave `immutable_subject` on.
 5. **GitHub → Settings → Environments:** create `production`, `staging` and `development`. Copy the values from the Create Deploy Role job summary into each:
 
-   | Secret | Value |
+   | Secret | Value (the same in all three environments) |
    |---|---|
-   | `AWS_DEPLOY_ROLE_ARN` | ARN of the deploy role (same for all three) |
-   | `REMOTE_STATE_ENV` | One secret with 3 `KEY=value` lines; the prefix depends on the stage (`PROD_`, `STAGING_`, `DEV_`) |
+   | `AWS_DEPLOY_ROLE_ARN` | ARN of the deploy role |
+   | `REMOTE_STORAGE_AWS_S3_BUCKET` | Terraform state bucket, e.g. `static-website-tfstate-<account_id>` |
+   | `REMOTE_STORAGE_AWS_REGION` | Region of that bucket, e.g. `us-east-1` |
+   | `REMOTE_STORAGE_AWS_S3_KEY` | `static-website/terraform.tfstate` |
 
-   Example `REMOTE_STATE_ENV` for `production`:
-   ```
-   PROD_REMOTE_STORAGE_AWS_S3_BUCKET=static-website-tfstate-<account_id>
-   PROD_REMOTE_STORAGE_AWS_REGION=us-east-1
-   PROD_REMOTE_STORAGE_AWS_S3_KEY=static-website/terraform.tfstate
-   ```
+   The secrets have no stage prefix: the environment they live in already decides the stage.
 
    Also set each environment's **deployment branch**: `production` → `main`, `staging` → `staging`, `development` → `dev`. Add **required reviewers** to `production`.
 6. **Create the `staging` and `dev` branches** from `main`. Pushing to them deploys their stage.

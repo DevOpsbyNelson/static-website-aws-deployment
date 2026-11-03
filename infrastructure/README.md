@@ -244,19 +244,15 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 
 | Secret | Required | Content |
 |---|---|---|
-| `REMOTE_STATE_ENV` | yes | `KEY=value` lines for the state backend (no quotes, no endpoint, no `test` keys). See the example below. |
 | `AWS_DEPLOY_ROLE_ARN` | yes | ARN of the deploy role assumed through GitHub OIDC (created by `aws_role/`) |
+| `REMOTE_STORAGE_AWS_S3_BUCKET` | yes | Terraform state bucket, e.g. `static-website-tfstate-<account_id>` |
+| `REMOTE_STORAGE_AWS_REGION` | yes | Region of the state bucket, e.g. `us-east-1` |
+| `REMOTE_STORAGE_AWS_S3_KEY` | yes | State key: `static-website/terraform.tfstate` |
 | `TFVARS_JSON` | no | Terraform variable overrides, e.g. `{"project_name": "static-website"}` |
 
-Example `REMOTE_STATE_ENV` for the `production` environment:
+The secrets have **no stage prefix**. The workflow turns them into the `<PREFIX>_REMOTE_STORAGE_*` settings the scripts expect (`PROD_`, `STAGING_` or `DEV_`, from the environment name).
 
-```
-PROD_REMOTE_STORAGE_AWS_S3_BUCKET=static-website-tfstate-<account_id>
-PROD_REMOTE_STORAGE_AWS_REGION=us-east-1
-PROD_REMOTE_STORAGE_AWS_S3_KEY=static-website/terraform.tfstate
-```
-
-`<account_id>` is the bucket that **Create Deploy Role** creates by default (`<project_name>-tfstate-<account_id>`). All three stages can share it: each workspace's state goes to its own key (`env:/<stage>/...`). Use `DEV_` and `STAGING_` as the prefix in the other environments.
+`static-website-tfstate-<account_id>` is the bucket that **Create Deploy Role** creates by default, and its job summary prints all four values. All three stages can share it: each workspace's state goes to its own key (`env:/<stage>/...`).
 
 Optional repository **variable**: `AWS_REGION` (default `us-east-1`).
 
@@ -276,7 +272,7 @@ ENVIRONMENT=staging ACTION=plan ./scripts/deploy.sh
 |---|---|---|
 | `ENVIRONMENT` | (required) | `development`, `staging` or `production` |
 | `ACTION` | `plan` | `plan`, `apply` or `destroy`. `apply` and `destroy` run with `-auto-approve`. |
-| `ENV_FILE` | `infrastructure/.env` | `KEY=value` file with the `*_REMOTE_STORAGE_*` settings. CI writes `REMOTE_STATE_ENV` here. |
+| `ENV_FILE` | `infrastructure/.env` | `KEY=value` file with the `*_REMOTE_STORAGE_*` settings. CI writes it from the `REMOTE_STORAGE_*` secrets. |
 | `TFVARS_FILE` | none | `.tfvars` or `.tfvars.json` file with variable overrides. CI writes `TFVARS_JSON` here. |
 
 ### Deploy role permissions
