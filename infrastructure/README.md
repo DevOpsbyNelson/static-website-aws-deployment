@@ -41,7 +41,7 @@ infrastructure/
 
 ## Prerequisites
 
-- Terraform >= 1.10 (S3-native state locking). Tested with 1.14.
+- Terraform >= 1.10 (S3-native state locking). CI uses 1.15.6.
 - AWS CLI v2. The scripts use it, and so does the cache invalidation after each upload.
 - AWS credentials allowed to manage S3 and CloudFront in the target account.
 - The built site: `cd ../website && pnpm install && pnpm build`.
@@ -251,10 +251,12 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 Example `REMOTE_STATE_ENV` for the `production` environment:
 
 ```
-PROD_REMOTE_STORAGE_AWS_S3_BUCKET=static-website-tfstate-prod
+PROD_REMOTE_STORAGE_AWS_S3_BUCKET=static-website-tfstate-<account_id>
 PROD_REMOTE_STORAGE_AWS_REGION=us-east-1
 PROD_REMOTE_STORAGE_AWS_S3_KEY=static-website/terraform.tfstate
 ```
+
+`<account_id>` is the bucket that **Create Deploy Role** creates by default (`<project_name>-tfstate-<account_id>`). All three stages can share it: each workspace's state goes to its own key (`env:/<stage>/...`). Use `DEV_` and `STAGING_` as the prefix in the other environments.
 
 Optional repository **variable**: `AWS_REGION` (default `us-east-1`).
 
@@ -262,19 +264,28 @@ How the workflow handles the secrets:
 - It writes them to the runner's temp folder, outside the checkout, and deletes them, together with `.terraform/`, at the end.
 - `deploy.sh` refuses to run in CI if an emulator endpoint (`AWS_ENDPOINT_URL` / `REMOTE_STORAGE_AWS_S3_ENDPOINT`) is set.
 
-### IAM permissions for the deploy role
+### `scripts/deploy.sh`
 
-The deploy role (`aws_role/` creates it) needs:
+The non-interactive entry point that the Deploy workflow calls. You can also run it locally:
 
-- **State bucket:**
-  - `s3:ListBucket` on the bucket
-  - `s3:GetObject`, `s3:PutObject` and `s3:DeleteObject` on `env:/*` and the state key, including the `.tflock` lock files
-- **Website:**
-  - `s3:*` on `arn:aws:s3:::static-website-<stage>-<account-id>` and `.../*`
-  - `cloudfront:*Distribution*`, `cloudfront:*OriginAccessControl*`, `cloudfront:CreateInvalidation`, `cloudfront:GetCachePolicy`, `cloudfront:ListCachePolicies`, `cloudfront:GetResponseHeadersPolicy`, `cloudfront:ListResponseHeadersPolicies`, `cloudfront:TagResource` and `cloudfront:ListTagsForResource`
-  - `sts:GetCallerIdentity`
+```bash
+ENVIRONMENT=staging ACTION=plan ./scripts/deploy.sh
+```
 
-For OIDC, the role's trust policy must allow `token.actions.githubusercontent.com` with `aud = sts.amazonaws.com`. Scope `sub` to this repository and environment, e.g. `repo:<owner>/<repo>:environment:production`.
+| Variable | Default | Meaning |
+|---|---|---|
+| `ENVIRONMENT` | (required) | `development`, `staging` or `production` |
+| `ACTION` | `plan` | `plan`, `apply` or `destroy`. `apply` and `destroy` run with `-auto-approve`. |
+| `ENV_FILE` | `infrastructure/.env` | `KEY=value` file with the `*_REMOTE_STORAGE_*` settings. CI writes `REMOTE_STATE_ENV` here. |
+| `TFVARS_FILE` | none | `.tfvars` or `.tfvars.json` file with variable overrides. CI writes `TFVARS_JSON` here. |
+
+### Deploy role permissions
+
+The IAM role is created by [`aws_role/`](../aws_role/README.md), which documents its trust policy (including GitHub's immutable subject) and permissions. In short, it can:
+- read and write only this stack's state keys;
+- use `s3:*` only on the `<project>-<stage>-<account>` website buckets;
+- use the CloudFront actions this stack needs;
+- do nothing in IAM.
 
 ## Troubleshooting
 

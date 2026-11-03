@@ -1,6 +1,45 @@
-# React + TypeScript + Vite
+# Website
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+The static site that this repository deploys: React 19 + TypeScript + Vite, with the React Compiler and Oxlint. See the [root README](../README.md) for how it is deployed.
+
+## Requirements
+
+- Node 26, which CI uses to build
+- pnpm 11 (`11.16.0` in CI)
+
+## Commands
+
+```bash
+pnpm install    # install dependencies (CI uses --frozen-lockfile)
+pnpm dev        # dev server with HMR
+pnpm build      # type-check (tsc -b) + production build into dist/
+pnpm preview    # serve dist/ locally
+pnpm lint       # Oxlint
+```
+
+## How it is deployed
+
+`pnpm build` writes to `dist/`. Terraform (`../infrastructure`) uploads that folder to S3, and CloudFront serves it:
+
+- **Long cache:** files under `dist/assets/` are cached for a year (`immutable`). Vite puts a content hash in their names (e.g. `index-z1dqokgX.js`), so a change produces a new file name. Don't put files without a hash into an `assets/` folder.
+- **Always revalidated:** everything else, such as `index.html` and files from `public/`, is revalidated on every request, so a new deploy shows up right away.
+- **Client-side routing:** unknown paths return `index.html` with status 200, so routes work on refresh.
+
+A push to `dev`, `staging` or `main` that changes this folder deploys the matching stage.
+
+## Dependency release age
+
+By default, pnpm 11 holds back package versions that were published very recently, to protect against compromised releases. When a dependency is pinned to such a version, `pnpm install` adds it to `minimumReleaseAgeExclude` in `pnpm-workspace.yaml`. That file currently lists the Babel 8.1.0 packages and `@vitejs/plugin-react@6.2.1`.
+
+- Review new entries in that file, then commit them together with `pnpm-lock.yaml`.
+- Remove an entry once that version is old enough.
+- To make pnpm stop instead of adding exclusions automatically, set `minimumReleaseAgeStrict: true`.
+
+---
+
+# Vite template notes
+
+This project started from the Vite React + TypeScript template, which gives a minimal setup to get React working in Vite with HMR and some Oxlint rules.
 
 Currently, two official plugins are available:
 

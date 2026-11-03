@@ -2,7 +2,9 @@
 
 This Terraform creates the IAM role that `.github/workflows/deploy.yml` assumes through GitHub OIDC. The role gets short-lived credentials, and no AWS keys are stored anywhere.
 
-- **Trust:** only this repository's jobs that run in the listed GitHub environments (`repo:<owner>/<repo>:environment:<name>`) can assume it.
+- **Trust:** only this repository's jobs that run in the listed GitHub environments can assume it:
+  - with GitHub's immutable subject: `repo:<owner>@<owner_id>/<repo>@<repo_id>:environment:<name>`;
+  - otherwise: `repo:<owner>/<repo>:environment:<name>`.
 - **Permissions:** least privilege for `infrastructure/`:
   - Its Terraform state keys only. Other keys in the state bucket, including this folder's own state, stay out of reach.
   - `s3:*` on the per-stage website buckets (`<project>-<stage>-<account>`) only.
@@ -42,6 +44,64 @@ State keys inside the bucket:
 - `aws-role/terraform.tfstate` for this folder.
 - `env:/<stage>/static-website/terraform.tfstate` for `infrastructure/`, one per workspace.
 
+### What each action does
+
+| Action | Effect in AWS |
+|---|---|
+| `plan` | Nothing is created. It only shows what `apply` would do. The state bucket is the exception: it is created if missing, because Terraform needs it to plan. |
+| `apply` | Creates or updates the deploy role and its policy. |
+| `destroy` | Deletes the deploy role and its policy, **without a preview**. |
+
+`destroy` leaves these alone:
+- the OIDC provider, when `create_oidc_provider = false`;
+- the bootstrap role;
+- the state bucket;
+- the deployed website, which belongs to `infrastructure/`.
+
+After a `destroy`, `deploy.yml` fails until the role is created again. Use the same inputs as the `apply`, especially `state_bucket`.
+
+## Terraform variables
+
+`create_role.yml` sets these from its inputs. To run the folder by hand, pass them with `-var` or a `.tfvars` file.
+
+| Variable | Default | Meaning |
+|---|---|---|
+| `github_repository` | (required) | `owner/repo` allowed to assume the role |
+| `github_repository_owner_id` / `github_repository_id` | `null` | Numeric IDs for GitHub's immutable subject. Set both or neither. |
+| `github_environments` | `["development","staging","production"]` | Environments allowed to assume the role; also the stage names used for website bucket ARNs |
+| `state_bucket_names` | (required) | State buckets the role may use |
+| `deploy_state_key` | `static-website/terraform.tfstate` | `infrastructure/`'s state key; the role may only touch it and `env:/*` |
+| `project_name` | `static-website` | Prefix of the website buckets (`<project_name>-<stage>-<account>`) |
+| `role_name` | `github-actions-static-website-deploy` | Name of the role |
+| `create_oidc_provider` | `true` | Create the GitHub OIDC provider, or reuse the existing one when `false` |
+| `max_session_duration` | `3600` | Maximum session length in seconds (3600–43200) |
+| `aws_region` | `us-east-1` | Provider region; IAM itself is global |
+
+Outputs:
+- `role_arn`: the value for the `AWS_DEPLOY_ROLE_ARN` secret.
+- `role_name`
+- `oidc_provider_arn`
+- `allowed_subjects`
+
+### Running it locally (optional)
+
+This needs credentials for the target account that can manage IAM, e.g. an SSO profile:
+
+```bash
+export AWS_PROFILE=<profile>
+terraform init \
+  -backend-config="bucket=<state bucket>" \
+  -backend-config="key=aws-role/terraform.tfstate" \
+  -backend-config="region=us-east-1"
+terraform plan \
+  -var 'github_repository=<owner>/<repo>' \
+  -var 'github_repository_owner_id=<owner_id>' -var 'github_repository_id=<repo_id>' \
+  -var 'state_bucket_names=["<state bucket>"]' \
+  -var 'create_oidc_provider=false'
+```
+
+Get the IDs with `gh api repos/<owner>/<repo> --jq '.owner.id, .id'`.
+
 ## One-time setup in a new AWS account
 
 1. **AWS console:** if the account has no GitHub provider yet, add it under **IAM → Identity providers → Add provider**:
@@ -72,3 +132,8 @@ To move to another AWS account, repeat these steps there: only the secrets chang
 terraform init -backend=false
 terraform test   # mocked AWS provider: no credentials needed, nothing is created
 ```
+
+The tests cover:
+- the trust policy: subjects, audience, immutable IDs, and reusing an existing provider;
+- the permission scoping: state keys only, `s3:*` only on the website buckets, no IAM actions;
+- input validation.
