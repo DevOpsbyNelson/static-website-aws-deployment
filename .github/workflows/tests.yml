@@ -1,0 +1,108 @@
+name: Terraform Tests
+
+on:
+  push:
+  pull_request:
+  workflow_call: {} # reused by deploy.yml as the gate before deploying
+
+permissions: {}
+
+jobs:
+  validate:
+    name: Terraform Validate (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - infrastructure/modules/static-website
+          - infrastructure
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.15.6"
+
+      - name: Check formatting
+        working-directory: ${{ matrix.module }}
+        run: terraform fmt -check -recursive
+
+      - name: Init (no backend)
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
+
+      - name: Validate
+        working-directory: ${{ matrix.module }}
+        run: terraform validate
+
+  scripts:
+    name: Shell Scripts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # shellcheck is preinstalled on ubuntu-latest.
+      - name: ShellCheck
+        working-directory: infrastructure/scripts
+        run: shellcheck -x --severity=warning ./*.sh
+
+  security-scan:
+    name: IaC Security Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Run Checkov
+        uses: bridgecrewio/checkov-action@6f26dc90000b74feb589a906cdfae540f5119895 # v12.3134.0
+        with:
+          directory: infrastructure
+          framework: terraform
+          # Starts as a report-only gate (soft_fail) since the existing findings haven't been
+          # triaged yet. Once the initial run is reviewed and false positives are added to
+          # .checkov.yaml's skip-check list, flip this to false to make it blocking.
+          soft_fail: true
+
+  tests:
+    needs: validate
+    name: Terraform Tests (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        module:
+          - infrastructure/modules/static-website
+          - infrastructure
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.15.6"
+
+      # Tests use a mocked AWS provider: no credentials needed, nothing is created.
+      - name: Init (no backend)
+        working-directory: ${{ matrix.module }}
+        run: terraform init -backend=false
+
+      - name: Run tests
+        working-directory: ${{ matrix.module }}
+        run: terraform test
