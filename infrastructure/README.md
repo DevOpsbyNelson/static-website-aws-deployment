@@ -219,7 +219,7 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 2. **`deploy` job**, run once per stage (`development`, `staging`, `production`) in parallel. Each run:
    - uses the GitHub environment of the same name, so it gets that environment's secrets and protection rules;
    - builds the website with Node 26 and pnpm;
-   - gets AWS credentials;
+   - assumes the deploy IAM role through GitHub OIDC (short-lived credentials, no stored AWS keys);
    - runs `scripts/deploy.sh`.
 
    Each stage has its own concurrency group, so two runs never touch the same state at once.
@@ -230,16 +230,14 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 
 ### Setup
 
-1. **Create the state bucket(s)** once from your machine with real AWS credentials:
-   `ENVIRONMENT=production ./scripts/bootstrap-state-bucket.sh`. Repeat for each bucket.
+1. **Create the deploy role and the state bucket** with the manual **Create Deploy Role** workflow. See [`aws_role/README.md`](../aws_role/README.md). Its job summary prints the exact secret values for step 3.
 2. **Create three GitHub environments**: `development`, `staging` and `production`. Add **required reviewers** to `production`. Otherwise every push to `main` deploys production without approval.
 3. **Add the secrets to each environment:**
 
 | Secret | Required | Content |
 |---|---|---|
 | `REMOTE_STATE_ENV` | yes | `KEY=value` lines for the state backend (no quotes, no endpoint, no `test` keys). See the example below. |
-| `AWS_DEPLOY_ROLE_ARN` | one of these two | IAM role assumed through GitHub OIDC (recommended: short-lived credentials) |
-| `AWS_ACCESS_KEY_ID` + `AWS_SECRET_ACCESS_KEY` | | Static keys, used only when `AWS_DEPLOY_ROLE_ARN` isn't set |
+| `AWS_DEPLOY_ROLE_ARN` | yes | ARN of the deploy role assumed through GitHub OIDC (created by `aws_role/`) |
 | `TFVARS_JSON` | no | Terraform variable overrides, e.g. `{"project_name": "static-website"}` |
 
 Example `REMOTE_STATE_ENV` for the `production` environment:
@@ -258,7 +256,7 @@ How the workflow handles the secrets:
 
 ### IAM permissions for the deploy role
 
-The role (or the access key's user) needs:
+The deploy role (`aws_role/` creates it) needs:
 
 - **State bucket:**
   - `s3:ListBucket` on the bucket

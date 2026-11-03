@@ -54,7 +54,7 @@ jobs:
 
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
-          node-version: "22"
+          node-version: "26"
           cache: pnpm
           cache-dependency-path: website/pnpm-lock.yaml
 
@@ -69,40 +69,12 @@ jobs:
           terraform_version: "1.15.6"
           terraform_wrapper: false # the scripts read terraform's stdout directly
 
-      # --- AWS credentials ------------------------------------------------------------------
-      # Preferred: set the AWS_DEPLOY_ROLE_ARN secret to an IAM role trusting this repo's OIDC
-      # provider (short-lived credentials). Fallback while that role doesn't exist yet: the
-      # AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY secrets. (secrets.* can't be used directly in
-      # `if:`, so the check happens in a run step and is passed along via $GITHUB_OUTPUT.)
-      - name: Check AWS credentials configured
-        id: aws_auth
-        run: |
-          if [ "$HAS_ROLE" = "true" ]; then
-            echo "method=oidc" >> "$GITHUB_OUTPUT"
-          elif [ "$HAS_KEYS" = "true" ]; then
-            echo "::warning::Using static AWS access keys. Set AWS_DEPLOY_ROLE_ARN to switch to OIDC."
-            echo "method=keys" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::Set the AWS_DEPLOY_ROLE_ARN secret (or AWS_ACCESS_KEY_ID + AWS_SECRET_ACCESS_KEY) for the '$ENVIRONMENT' environment."
-            exit 1
-          fi
-        env:
-          HAS_ROLE: ${{ secrets.AWS_DEPLOY_ROLE_ARN != '' }}
-          HAS_KEYS: ${{ secrets.AWS_ACCESS_KEY_ID != '' && secrets.AWS_SECRET_ACCESS_KEY != '' }}
-
-      - name: Configure AWS credentials (OIDC)
-        if: steps.aws_auth.outputs.method == 'oidc'
+      # --- AWS credentials (OIDC) -------------------------------------------------------------
+      # Assumes the deploy role from aws_role/ with short-lived credentials; no AWS keys are stored.
+      - name: Configure AWS credentials
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
           role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
-          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
-
-      - name: Configure AWS credentials (static keys)
-        if: steps.aws_auth.outputs.method == 'keys'
-        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
 
       # --- Deploy -----------------------------------------------------------------------------
