@@ -240,11 +240,18 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 
 1. **Create the deploy role and the state bucket** with the manual **Create Deploy Role** workflow. See [`aws_role/README.md`](../aws_role/README.md). Its job summary prints the exact secret values for step 3.
 2. **Create three GitHub environments**: `development`, `staging` and `production`. In each one, set **Deployment branches** to its branch only (`production` → `main`, `staging` → `staging`, `development` → `dev`). Add **required reviewers** to `production`; otherwise every push to `main` deploys production without approval.
-3. **Add the secrets to each environment:**
+3. **Add the secrets.**
+
+**Repository secret** (Settings → Secrets and variables → Actions), shared by all stages:
 
 | Secret | Required | Content |
 |---|---|---|
-| `AWS_DEPLOY_ROLE_ARN` | yes | ARN of the deploy role assumed through GitHub OIDC (created by `aws_role/`) |
+| `AWS_DEPLOY_ROLE_ARN` | yes | ARN of the deploy role assumed through GitHub OIDC (created by `aws_role/`). It is one role for all stages, and its trust policy only accepts the `development`, `staging` and `production` environments. |
+
+**Environment secrets**, in each of `development`, `staging` and `production`:
+
+| Secret | Required | Content |
+|---|---|---|
 | `REMOTE_STORAGE_AWS_S3_BUCKET` | yes | Terraform state bucket, e.g. `static-website-tfstate-<account_id>` |
 | `REMOTE_STORAGE_AWS_REGION` | yes | Region of the state bucket, e.g. `us-east-1` |
 | `REMOTE_STORAGE_AWS_S3_KEY` | yes | State key: `static-website/terraform.tfstate` |

@@ -165,11 +165,16 @@ jobs:
           {
             echo "## Deploy role ready"
             echo
-            echo "Add these **secrets** to each GitHub environment (\`development\`, \`staging\`, \`production\`); the values are the same in all of them:"
+            echo "**Repository secret** (Settings → Secrets and variables → Actions), shared by all stages:"
             echo
             echo "| Secret | Value |"
             echo "|---|---|"
             echo "| \`AWS_DEPLOY_ROLE_ARN\` | \`$ROLE_ARN\` |"
+            echo
+            echo "**Environment secrets** in \`development\`, \`staging\` and \`production\` (same values in all of them):"
+            echo
+            echo "| Secret | Value |"
+            echo "|---|---|"
             echo "| \`REMOTE_STORAGE_AWS_S3_BUCKET\` | \`$STATE_BUCKET\` |"
             echo "| \`REMOTE_STORAGE_AWS_REGION\` | \`$AWS_REGION\` |"
             echo "| \`REMOTE_STORAGE_AWS_S3_KEY\` | \`$DEPLOY_STATE_KEY\` |"
