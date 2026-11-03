@@ -216,7 +216,15 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
    - ShellCheck on the scripts
    - a Checkov security scan, report-only for now
    - both `terraform test` suites (mocked, so no credentials needed)
-2. **`deploy` job**, run once per stage (`development`, `staging`, `production`) in parallel. Each run:
+2. **`deploy` job**, for the stage that matches the branch:
+
+   | Branch | Stage (GitHub environment) |
+   |---|---|
+   | `main` | `production` |
+   | `staging` | `staging` |
+   | `dev` | `development` |
+
+   Other branches deploy nothing. The run:
    - uses the GitHub environment of the same name, so it gets that environment's secrets and protection rules;
    - builds the website with Node 26 and pnpm;
    - assumes the deploy IAM role through GitHub OIDC (short-lived credentials, no stored AWS keys);
@@ -225,13 +233,13 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
    Each stage has its own concurrency group, so two runs never touch the same state at once.
 
 **Triggers:**
-- A push to `main` that changes `website/`, `infrastructure/` or the workflow runs `apply`.
-- A manual run (**Actions → Deploy → Run workflow**) lets you choose `apply` or `plan`.
+- A push to `main`, `staging` or `dev` that changes `website/`, `infrastructure/` or the workflows runs `apply` for that branch's stage.
+- A manual run (**Actions → Deploy → Run workflow**) lets you choose `apply` or `plan`. Pick the branch in that dialog: its stage is the one that runs.
 
 ### Setup
 
 1. **Create the deploy role and the state bucket** with the manual **Create Deploy Role** workflow. See [`aws_role/README.md`](../aws_role/README.md). Its job summary prints the exact secret values for step 3.
-2. **Create three GitHub environments**: `development`, `staging` and `production`. Add **required reviewers** to `production`. Otherwise every push to `main` deploys production without approval.
+2. **Create three GitHub environments**: `development`, `staging` and `production`. In each one, set **Deployment branches** to its branch only (`production` → `main`, `staging` → `staging`, `development` → `dev`). Add **required reviewers** to `production`; otherwise every push to `main` deploys production without approval.
 3. **Add the secrets to each environment:**
 
 | Secret | Required | Content |

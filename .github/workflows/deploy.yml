@@ -1,8 +1,9 @@
 name: Deploy
 
+# Each branch deploys its own stage: main -> production, staging -> staging, dev -> development.
 on:
   push:
-    branches: [main]
+    branches: [main, staging, dev]
     paths:
       - "website/**"
       - "infrastructure/**"
@@ -19,28 +20,49 @@ on:
 permissions: {}
 
 jobs:
+  # Maps the branch to its stage; other branches (e.g. a manual run from a feature branch) deploy nothing.
+  stage:
+    runs-on: ubuntu-latest
+    permissions: {}
+    outputs:
+      environment: ${{ steps.map.outputs.environment }}
+    steps:
+      - id: map
+        run: |
+          case "$BRANCH" in
+            main) ENVIRONMENT=production ;;
+            staging) ENVIRONMENT=staging ;;
+            dev) ENVIRONMENT=development ;;
+            *) ENVIRONMENT="" ;;
+          esac
+          echo "environment=$ENVIRONMENT" >> "$GITHUB_OUTPUT"
+          if [ -n "$ENVIRONMENT" ]; then
+            echo "Branch $BRANCH deploys to $ENVIRONMENT"
+          else
+            echo "::notice::Branch $BRANCH is not mapped to a stage (main, staging, dev); nothing to deploy."
+          fi
+        env:
+          BRANCH: ${{ github.ref_name }}
+
   test:
     permissions:
       contents: read
     uses: ./.github/workflows/tests.yml
 
   deploy:
-    needs: test
+    needs: [stage, test]
+    if: needs.stage.outputs.environment != ''
     permissions:
       contents: read
       id-token: write # allows the AWS OIDC step below to request a short-lived token
-    strategy:
-      fail-fast: false
-      matrix:
-        environment: [development, staging, production]
     runs-on: ubuntu-latest
     # GitHub environment per stage: holds its secrets and protection rules (e.g. required reviewers for production).
-    environment: ${{ matrix.environment }}
+    environment: ${{ needs.stage.outputs.environment }}
     concurrency:
-      group: deploy-${{ matrix.environment }}
+      group: deploy-${{ needs.stage.outputs.environment }}
       cancel-in-progress: false
     env:
-      ENVIRONMENT: ${{ matrix.environment }}
+      ENVIRONMENT: ${{ needs.stage.outputs.environment }}
       ACTION: ${{ inputs.action || 'apply' }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
