@@ -27,6 +27,12 @@ variable "site_dir" {
   default     = "../website/dist"
 }
 
+variable "force_destroy_override" {
+  description = "Let the stage's bucket be deleted with its files, overriding stages[*].force_destroy. Set only to tear a stage down (scripts/deploy.sh with ACTION=destroy does it)."
+  type        = bool
+  default     = false
+}
+
 variable "stage" {
   description = "Stage to use instead of the workspace name. Meant for `terraform test`, which always runs in the default workspace; leave unset otherwise."
   type        = string

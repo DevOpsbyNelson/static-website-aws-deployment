@@ -34,7 +34,8 @@ infrastructure/
 │   ├── bootstrap-state-bucket.sh  # creates the S3 bucket for Terraform state
 │   ├── terraform-init.sh          # terraform init with the S3 backend + selects workspace
 │   ├── terraform-run.sh           # init, then any terraform command for ENVIRONMENT
-│   └── deploy.sh                  # non-interactive plan/apply/destroy (used by CI)
+│   ├── deploy.sh                  # non-interactive plan/apply/destroy (used by CI)
+│   └── ci-write-env.sh            # CI: turns environment secrets into the files the scripts read
 └── modules/static-website/   # reusable module: S3 + CloudFront + upload
     └── tests/                # module unit tests + fixture site
 ```
@@ -175,13 +176,21 @@ terraform test
 
 ## Destroy
 
+**From GitHub:** run **Actions → Destroy**, pick the stage and type its name again in `confirm`.
+
+**Locally:**
+
 ```bash
-ENVIRONMENT=development ./scripts/terraform-run.sh destroy
+export ENVIRONMENT=development TF_VAR_force_destroy_override=true
+./scripts/terraform-run.sh apply -target=module.website.aws_s3_bucket.site   # store force_destroy in the state
+./scripts/terraform-run.sh destroy
 ```
+
+The bucket is versioned, so Terraform can only delete it with `force_destroy = true`. That setting only works once it is in the state, which is why the targeted `apply` comes first. `force_destroy_override` turns it on for that run only, without changing `var.stages`.
 
 Deleting a CloudFront distribution takes about 15 minutes, because AWS first disables it and waits for that change to finish rolling out.
 
-`production` has `force_destroy = false`, so its bucket can't be destroyed while it still holds files. To destroy it on purpose, first set `force_destroy = true` for production in `var.stages` and apply that change.
+`production` has `force_destroy = false`, so a normal `apply` can never leave its bucket deletable by accident. Only `force_destroy_override` (used by the Destroy workflow) unlocks it.
 
 ## Reusing the module
 

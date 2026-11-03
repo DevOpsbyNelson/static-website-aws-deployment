@@ -105,6 +105,38 @@ run "production" {
   }
 }
 
+run "force_destroy_override_unlocks_production" {
+  command = plan
+
+  variables {
+    stage                  = "production"
+    force_destroy_override = true
+  }
+
+  assert {
+    condition     = module.website.bucket_force_destroy == true
+    error_message = "force_destroy_override must let the production bucket be deleted."
+  }
+
+  assert {
+    condition     = local.stage_config.force_destroy == false
+    error_message = "The override must not change the stage's own setting."
+  }
+}
+
+run "production_bucket_is_protected_by_default" {
+  command = plan
+
+  variables {
+    stage = "production"
+  }
+
+  assert {
+    condition     = module.website.bucket_force_destroy == false
+    error_message = "Without the override the production bucket must stay protected."
+  }
+}
+
 run "project_name_is_validated" {
   command = plan
 

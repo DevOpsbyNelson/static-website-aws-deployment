@@ -1,0 +1,85 @@
+name: Destroy
+
+# Manually tears down one stage's website infrastructure (S3 bucket with all its file versions,
+# CloudFront distribution and OAC) created by infrastructure/. The deploy role, the state bucket
+# and the bootstrap role are not touched; destroy the deploy role with create_role.yml afterwards.
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Stage to destroy
+        type: choice
+        options: [development, staging, production]
+      confirm:
+        description: Type the stage name again to confirm (this deletes the site and all its files)
+        type: string
+        required: true
+
+permissions: {}
+
+jobs:
+  destroy:
+    name: destroy ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # allows the AWS OIDC step below to request a short-lived token
+    # Same environment as deploy.yml: its secrets, protection rules and the deploy role's trust.
+    environment: ${{ inputs.environment }}
+    # Shares deploy.yml's group so a deploy and a destroy of the same stage never overlap.
+    concurrency:
+      group: deploy-${{ inputs.environment }}
+      cancel-in-progress: false
+    env:
+      ENVIRONMENT: ${{ inputs.environment }}
+      CONFIRM: ${{ inputs.confirm }}
+    steps:
+      - name: Check confirmation
+        run: |
+          if [ "$CONFIRM" != "$ENVIRONMENT" ]; then
+            echo "::error::Confirmation '$CONFIRM' doesn't match '$ENVIRONMENT'. Nothing was destroyed."
+            exit 1
+          fi
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: "1.15.6"
+          terraform_wrapper: false # the scripts read terraform's stdout directly
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION || 'us-east-1' }}
+
+      - name: Write environment secrets
+        run: bash infrastructure/scripts/ci-write-env.sh
+        env:
+          REMOTE_STORAGE_AWS_S3_BUCKET: ${{ secrets.REMOTE_STORAGE_AWS_S3_BUCKET }}
+          REMOTE_STORAGE_AWS_REGION: ${{ secrets.REMOTE_STORAGE_AWS_REGION }}
+          REMOTE_STORAGE_AWS_S3_KEY: ${{ secrets.REMOTE_STORAGE_AWS_S3_KEY }}
+          TFVARS_JSON: ${{ secrets.TFVARS_JSON }}
+
+      # The bucket is versioned and production keeps force_destroy = false, so Terraform can't
+      # delete it while it holds files. force_destroy only takes effect once it is in the state,
+      # hence a first apply limited to the bucket, then the full destroy.
+      - name: Destroy
+        run: |
+          VAR_FILE_ARGS=()
+          [ -n "${TFVARS_FILE:-}" ] && VAR_FILE_ARGS=("-var-file=$TFVARS_FILE")
+          bash infrastructure/scripts/terraform-run.sh apply -input=false -auto-approve \
+            -target=module.website.aws_s3_bucket.site "${VAR_FILE_ARGS[@]}"
+          bash infrastructure/scripts/terraform-run.sh destroy -input=false -auto-approve "${VAR_FILE_ARGS[@]}"
+          echo "### 🗑️ $ENVIRONMENT website infrastructure destroyed" >> "$GITHUB_STEP_SUMMARY"
+        env:
+          TF_VAR_force_destroy_override: "true"
+
+      - name: Remove secrets written to disk
+        if: always()
+        run: |
+          rm -f "$RUNNER_TEMP/remote-state.$ENVIRONMENT.env" "$RUNNER_TEMP/$ENVIRONMENT.tfvars.json"
+          rm -rf infrastructure/.terraform # holds backend config, possibly with credentials

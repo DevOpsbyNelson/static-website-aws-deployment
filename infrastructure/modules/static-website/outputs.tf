@@ -13,6 +13,11 @@ output "bucket_arn" {
   value       = aws_s3_bucket.site.arn
 }
 
+output "bucket_force_destroy" {
+  description = "Whether the bucket can be deleted while it still contains files."
+  value       = aws_s3_bucket.site.force_destroy
+}
+
 output "cloudfront_distribution_id" {
   description = "CloudFront distribution ID (for manual cache invalidations)."
   value       = aws_cloudfront_distribution.site.id

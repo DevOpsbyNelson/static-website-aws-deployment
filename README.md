@@ -33,6 +33,7 @@ A push that changes `website/`, `infrastructure/` or the workflows runs the test
 |---|---|---|
 | **Terraform Tests** (`tests.yml`) | every push and pull request; also called by Deploy | `terraform fmt`/`validate`, ShellCheck, Checkov (report-only) and `terraform test` (mocked AWS, no credentials) |
 | **Deploy** (`deploy.yml`) | push to `main`/`staging`/`dev`, or manual (`plan`/`apply`, optional rollback `commit_sha`) | Builds the site (Node 26, pnpm), assumes the deploy role through OIDC, and runs Terraform for the branch's stage |
+| **Destroy** (`destroy.yml`) | manual only | Deletes one stage's website infrastructure (S3 bucket with all file versions, CloudFront, OAC). You must type the stage name again to confirm. |
 | **Create Deploy Role** (`create_role.yml`) | manual only | Creates, updates or destroys the deploy role (`plan`/`apply`/`destroy`) with the bootstrap role |
 
 How the pieces fit together:
@@ -62,6 +63,18 @@ Only `website/` goes back to that commit. Terraform and the scripts stay at the 
 Commits that aren't in the branch's history are rejected, so an unreviewed commit can't reach production. The job summary shows which commit was deployed.
 
 The next normal push to that branch deploys its latest code again.
+
+### Tearing everything down
+
+Everything Terraform created goes away in this order:
+
+1. **Actions → Destroy:** pick the stage and type its name again in `confirm`. Repeat for each stage that was deployed. This needs the deploy role, so it must come first.
+2. **Actions → Create Deploy Role** with `action = destroy`: deletes the deploy role.
+
+Terraform didn't create these, so they stay until you remove them by hand:
+- the state bucket (`<project>-tfstate-<account_id>`);
+- the `github-actions-bootstrap` role;
+- the GitHub OIDC provider.
 
 ## Getting started (developers)
 

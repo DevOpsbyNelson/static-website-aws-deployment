@@ -138,31 +138,7 @@ jobs:
       # The environment's REMOTE_STORAGE_* secrets become the <PREFIX>_REMOTE_STORAGE_* settings
       # (PROD_, STAGING_, DEV_) that infrastructure/scripts expect, in a KEY=value file.
       - name: Write environment secrets
-        run: |
-          MISSING=""
-          for NAME in REMOTE_STORAGE_AWS_S3_BUCKET REMOTE_STORAGE_AWS_REGION REMOTE_STORAGE_AWS_S3_KEY; do
-            [ -n "${!NAME}" ] || MISSING="$MISSING $NAME"
-          done
-          if [ -n "$MISSING" ]; then
-            echo "::error::Set these secrets in the '$ENVIRONMENT' environment:$MISSING"
-            exit 1
-          fi
-          SCRIPT_DIR=infrastructure/scripts
-          . infrastructure/scripts/common.sh
-          PREFIX="$(resolve_environment_prefix "$ENVIRONMENT")"
-          umask 077
-          ENV_FILE="$RUNNER_TEMP/remote-state.$ENVIRONMENT.env"
-          {
-            echo "${PREFIX}_REMOTE_STORAGE_AWS_S3_BUCKET=$REMOTE_STORAGE_AWS_S3_BUCKET"
-            echo "${PREFIX}_REMOTE_STORAGE_AWS_REGION=$REMOTE_STORAGE_AWS_REGION"
-            echo "${PREFIX}_REMOTE_STORAGE_AWS_S3_KEY=$REMOTE_STORAGE_AWS_S3_KEY"
-          } > "$ENV_FILE"
-          echo "ENV_FILE=$ENV_FILE" >> "$GITHUB_ENV"
-          if [ -n "$TFVARS_JSON" ]; then
-            TFVARS_FILE="$RUNNER_TEMP/$ENVIRONMENT.tfvars.json"
-            printf '%s' "$TFVARS_JSON" | jq -e . > "$TFVARS_FILE"
-            echo "TFVARS_FILE=$TFVARS_FILE" >> "$GITHUB_ENV"
-          fi
+        run: bash infrastructure/scripts/ci-write-env.sh
         env:
           REMOTE_STORAGE_AWS_S3_BUCKET: ${{ secrets.REMOTE_STORAGE_AWS_S3_BUCKET }}
           REMOTE_STORAGE_AWS_REGION: ${{ secrets.REMOTE_STORAGE_AWS_REGION }}
