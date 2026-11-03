@@ -19,6 +19,7 @@ jobs:
         module:
           - infrastructure/modules/static-website
           - infrastructure
+          - aws_role
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -69,7 +70,7 @@ jobs:
       - name: Run Checkov
         uses: bridgecrewio/checkov-action@6f26dc90000b74feb589a906cdfae540f5119895 # v12.3134.0
         with:
-          directory: infrastructure
+          directory: .
           framework: terraform
           # Starts as a report-only gate (soft_fail) since the existing findings haven't been
           # triaged yet. Once the initial run is reviewed and false positives are added to
@@ -88,6 +89,7 @@ jobs:
         module:
           - infrastructure/modules/static-website
           - infrastructure
+          - aws_role
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
