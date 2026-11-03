@@ -16,6 +16,10 @@ on:
         type: choice
         options: [apply, plan]
         default: apply
+      commit_sha:
+        description: Roll the website back to this commit (full or short SHA from the selected branch's history; empty = latest)
+        type: string
+        default: ""
 
 permissions: {}
 
@@ -64,10 +68,40 @@ jobs:
     env:
       ENVIRONMENT: ${{ needs.stage.outputs.environment }}
       ACTION: ${{ inputs.action || 'apply' }}
+      COMMIT_SHA: ${{ inputs.commit_sha }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          fetch-depth: ${{ inputs.commit_sha != '' && '0' || '1' }} # rollbacks need the branch history
+
+      # --- Rollback (manual runs with commit_sha) ---------------------------------------------
+      # Only website/ goes back to that commit; Terraform and the scripts stay at the branch's
+      # latest version, so a rollback never re-applies old infrastructure code.
+      - name: Check out website from rollback commit
+        if: env.COMMIT_SHA != ''
+        run: |
+          if ! [[ "$COMMIT_SHA" =~ ^[0-9a-fA-F]{7,40}$ ]]; then
+            echo "::error::commit_sha must be a 7-40 character hexadecimal commit SHA."
+            exit 1
+          fi
+          if ! SHA="$(git rev-parse --verify --quiet "${COMMIT_SHA}^{commit}")"; then
+            echo "::error::Commit $COMMIT_SHA not found in this repository."
+            exit 1
+          fi
+          # Only commits that are part of the selected branch may be deployed to its stage.
+          if ! git merge-base --is-ancestor "$SHA" HEAD; then
+            echo "::error::Commit $SHA is not in the history of $GITHUB_REF_NAME; it can't be deployed to $ENVIRONMENT."
+            exit 1
+          fi
+          if ! git cat-file -e "$SHA:website/package.json" 2>/dev/null; then
+            echo "::error::Commit $SHA has no website/ to deploy."
+            exit 1
+          fi
+          git restore --source="$SHA" --worktree -- website
+          SUBJECT="$(git log -1 --format='%h %s' "$SHA")"
+          echo "Rolling website back to $SUBJECT"
+          echo "### ⏪ $ENVIRONMENT website rolled back to \`$SUBJECT\`" >> "$GITHUB_STEP_SUMMARY"
 
       # --- Build the website (Terraform uploads website/dist) -----------------------------
       - uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413 # v6.1.0

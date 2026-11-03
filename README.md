@@ -32,7 +32,7 @@ A push that changes `website/`, `infrastructure/` or the workflows runs the test
 | Workflow | Trigger | What it does |
 |---|---|---|
 | **Terraform Tests** (`tests.yml`) | every push and pull request; also called by Deploy | `terraform fmt`/`validate`, ShellCheck, Checkov (report-only) and `terraform test` (mocked AWS, no credentials) |
-| **Deploy** (`deploy.yml`) | push to `main`/`staging`/`dev`, or manual (`plan`/`apply`) | Builds the site (Node 26, pnpm), assumes the deploy role through OIDC, and runs Terraform for the branch's stage |
+| **Deploy** (`deploy.yml`) | push to `main`/`staging`/`dev`, or manual (`plan`/`apply`, optional rollback `commit_sha`) | Builds the site (Node 26, pnpm), assumes the deploy role through OIDC, and runs Terraform for the branch's stage |
 | **Create Deploy Role** (`create_role.yml`) | manual only | Creates, updates or destroys the deploy role (`plan`/`apply`/`destroy`) with the bootstrap role |
 
 How the pieces fit together:
@@ -49,6 +49,19 @@ How the pieces fit together:
 - **`plan`** only shows what would change; nothing is created in AWS.
 - **`apply`** makes the changes.
 - **`destroy`** deletes what that Terraform created, without a preview.
+
+### Rolling back the website
+
+To redeploy an earlier version of the site:
+1. Open **Actions → Deploy → Run workflow**.
+2. Pick the branch of the stage, e.g. `main` for production.
+3. Enter a **`commit_sha`** from that branch's history, short or full.
+
+Only `website/` goes back to that commit. Terraform and the scripts stay at the branch's latest version, so a rollback never re-applies old infrastructure code. To undo an infrastructure change, use `git revert` and push.
+
+Commits that aren't in the branch's history are rejected, so an unreviewed commit can't reach production. The job summary shows which commit was deployed.
+
+The next normal push to that branch deploys its latest code again.
 
 ## Getting started (developers)
 

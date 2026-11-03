@@ -235,6 +235,10 @@ Outputs: `website_url`, `bucket_name`, `bucket_arn`, `cloudfront_distribution_id
 **Triggers:**
 - A push to `main`, `staging` or `dev` that changes `website/`, `infrastructure/` or the workflows runs `apply` for that branch's stage.
 - A manual run (**Actions → Deploy → Run workflow**) lets you choose `apply` or `plan`. Pick the branch in that dialog: its stage is the one that runs.
+- **Rollback:** in a manual run, set `commit_sha` to an earlier commit of that branch.
+  - The website is built from that commit, while Terraform and the scripts stay at the branch's latest version.
+  - Commits outside the branch's history are rejected.
+  - The next push to the branch deploys the latest code again.
 
 ### Setup
 
